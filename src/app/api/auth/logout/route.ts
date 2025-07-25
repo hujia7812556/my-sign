@@ -24,7 +24,8 @@ export async function POST(request: NextRequest) {
     const redirectTo = searchParams.get('redirect') || '/login'
     
     // 创建响应并清除认证 Cookie
-    const response = NextResponse.redirect(new URL(redirectTo, request.url))
+    const baseUrl = process.env.NEXT_APP_URL || 'http://localhost:3000'
+    const response = NextResponse.redirect(new URL(redirectTo, baseUrl))
     clearAuthCookie(response)
     
     console.log('User logged out successfully')
@@ -35,7 +36,8 @@ export async function POST(request: NextRequest) {
     console.error('Logout unexpected error:', error)
     
     // 即使发生错误也要清除 Cookie
-    const response = NextResponse.redirect(new URL('/login', request.url))
+    const baseUrl = process.env.NEXT_APP_URL || 'http://localhost:3000'
+    const response = NextResponse.redirect(new URL('/login', baseUrl))
     clearAuthCookie(response)
     
     return response

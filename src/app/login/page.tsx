@@ -103,7 +103,13 @@ export default function LoginPage() {
   useEffect(() => {
     // 设置当前域名
     if (typeof window !== 'undefined') {
-      setOrigin(window.location.origin)
+      // 优先使用环境变量配置的 URL，如果没有则使用当前页面的 origin
+      const configuredUrl = process.env.NEXT_PUBLIC_APP_URL
+      if (configuredUrl) {
+        setOrigin(configuredUrl)
+      } else {
+        setOrigin(window.location.origin)
+      }
     }
   }, [])
   

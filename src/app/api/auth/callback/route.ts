@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
     
     if (!code) {
       console.error('No authorization code provided')
-      return NextResponse.redirect(new URL('/login?error=no_code', request.url))
+      const baseUrl = process.env.NEXT_APP_URL || 'http://localhost:3000'
+      return NextResponse.redirect(new URL('/login?error=no_code', baseUrl))
     }
     
     const supabase = await createSupabaseServerClient()
@@ -26,14 +27,16 @@ export async function GET(request: NextRequest) {
     
     if (error) {
       console.error('Auth callback error:', error)
+      const baseUrl = process.env.NEXT_APP_URL || 'http://localhost:3000'
       return NextResponse.redirect(
-        new URL(`/login?error=${encodeURIComponent(error.message)}`, request.url)
+        new URL(`/login?error=${encodeURIComponent(error.message)}`, baseUrl)
       )
     }
     
     if (!data.session) {
       console.error('No session returned from auth callback')
-      return NextResponse.redirect(new URL('/login?error=no_session', request.url))
+      const baseUrl = process.env.NEXT_APP_URL || 'http://localhost:3000'
+      return NextResponse.redirect(new URL('/login?error=no_session', baseUrl))
     }
     
     // 确定重定向 URL
@@ -44,17 +47,22 @@ export async function GET(request: NextRequest) {
     }
     
     // 创建响应并设置认证 Cookie
-    const response = NextResponse.redirect(new URL(finalRedirectUrl, request.url))
+    const baseUrl = process.env.NEXT_APP_URL || 'http://localhost:3000'
+    const response = NextResponse.redirect(new URL(finalRedirectUrl, baseUrl))
+    
     setAuthCookie(response, data.session)
     
+    // 检查设置后的 Cookie
+    console.log('Response cookies after setAuthCookie:', response.cookies.getAll())
     console.log('Auth callback successful, redirecting to:', finalRedirectUrl)
     
     return response
     
   } catch (error) {
     console.error('Auth callback unexpected error:', error)
+    const baseUrl = process.env.NEXT_APP_URL || 'http://localhost:3000'
     return NextResponse.redirect(
-      new URL('/login?error=unexpected_error', request.url)
+      new URL('/login?error=unexpected_error', baseUrl)
     )
   }
 }

@@ -26,17 +26,25 @@ export async function GET(request: NextRequest) {
     
     if (sessionData) {
       // 用户已认证，返回 200 并传递用户信息
-      const response = NextResponse.next()
+      const response = new NextResponse(null, { status: 200 })
       
       // 设置用户信息头部，供后端应用使用
       response.headers.set('X-User-Id', sessionData.user.id)
       response.headers.set('X-User-Email', sessionData.user.email || '')
-      response.headers.set('X-User-Name', sessionData.user.user_metadata?.name || '')
       
-      return new NextResponse(null, {
-        status: 200,
-        headers: response.headers
-      })
+      // 处理用户名，使用 Base64 编码以支持中文字符并避免 ByteString 错误
+      const userName = sessionData.user.user_metadata?.name || ''
+      const encodedUserName = userName ? Buffer.from(userName, 'utf8').toString('base64') : ''
+      response.headers.set('X-User-Name', encodedUserName)
+      response.headers.set('X-User-Name-Encoding', 'base64') // 标识编码方式
+      
+      // 传递原始请求中的 Cookie
+      const cookieHeader = request.headers.get('cookie')
+      if (cookieHeader) {
+        response.headers.set('Cookie', cookieHeader)
+      }
+      
+      return response
     }
     
     // 尝试刷新会话
@@ -44,11 +52,11 @@ export async function GET(request: NextRequest) {
     if (refreshToken) {
       const newSession = await refreshSession(refreshToken)
       if (newSession) {
-        const response = NextResponse.next()
+        const response = new NextResponse(null, { status: 200 })
         
         // 设置新的认证 Cookie
         response.cookies.set('sb-access-token', newSession.access_token, {
-          domain: process.env.COOKIE_DOMAIN || '.mydomain.com',
+          domain: process.env.COOKIE_DOMAIN || '.localhost',
           httpOnly: true,
           secure: process.env.COOKIE_SECURE === 'true',
           sameSite: 'lax',
@@ -58,12 +66,20 @@ export async function GET(request: NextRequest) {
         // 设置用户信息头部
         response.headers.set('X-User-Id', newSession.user.id)
         response.headers.set('X-User-Email', newSession.user.email || '')
-        response.headers.set('X-User-Name', newSession.user.user_metadata?.name || '')
         
-        return new NextResponse(null, {
-          status: 200,
-          headers: response.headers
-        })
+        // 处理用户名，使用 Base64 编码以支持中文字符并避免 ByteString 错误
+        const userName = newSession.user.user_metadata?.name || ''
+        const encodedUserName = userName ? Buffer.from(userName, 'utf8').toString('base64') : ''
+        response.headers.set('X-User-Name', encodedUserName)
+        response.headers.set('X-User-Name-Encoding', 'base64') // 标识编码方式
+        
+        // 传递原始请求中的 Cookie
+        const cookieHeader = request.headers.get('cookie')
+        if (cookieHeader) {
+          response.headers.set('Cookie', cookieHeader)
+        }
+        
+        return response
       }
     }
     
@@ -81,7 +97,17 @@ export async function GET(request: NextRequest) {
     console.error('ForwardAuth error:', error)
     
     // 发生错误时重定向到登录页
-    const loginUrl = generateLoginUrl(request.url)
+    // 尝试获取原始 URL，如果失败则使用默认值
+    const forwardedHost = request.headers.get('x-forwarded-host')
+    const forwardedProto = request.headers.get('x-forwarded-proto') || 'https'
+    const forwardedUri = request.headers.get('x-forwarded-uri') || '/'
+    
+    let originalUrl = '/'
+    if (forwardedHost) {
+      originalUrl = `${forwardedProto}://${forwardedHost}${forwardedUri}`
+    }
+    
+    const loginUrl = generateLoginUrl(originalUrl)
     
     return new NextResponse(null, {
       status: 302,

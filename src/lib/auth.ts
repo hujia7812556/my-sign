@@ -36,6 +36,9 @@ export function setAuthCookie(response: NextResponse, session: any) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const projectRef = new URL(supabaseUrl).hostname.split('.')[0]
   
+  // 获取 Cookie 域名配置
+  const cookieDomain = process.env.COOKIE_DOMAIN || '.localhost'
+  
   // 设置 Supabase 标准 cookies
   response.cookies.set(`sb-${projectRef}-auth-token`, JSON.stringify({
     access_token: session.access_token,
@@ -49,7 +52,8 @@ export function setAuthCookie(response: NextResponse, session: any) {
     secure: isSecure,
     sameSite: 'lax',
     maxAge: session.expires_in,
-    path: '/'
+    path: '/',
+    domain: cookieDomain // 设置域名以支持跨子域名访问
   })
 }
 
@@ -61,10 +65,14 @@ export function clearAuthCookie(response: NextResponse) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const projectRef = new URL(supabaseUrl).hostname.split('.')[0]
   
+  // 获取 Cookie 域名配置
+  const cookieDomain = process.env.COOKIE_DOMAIN || '.localhost'
+  
   // 清除 Supabase 标准 cookie
   response.cookies.set(`sb-${projectRef}-auth-token`, '', {
     maxAge: 0,
-    path: '/'
+    path: '/',
+    domain: cookieDomain // 确保清除时使用相同的域名
   })
 }
 
@@ -97,7 +105,9 @@ export async function refreshSession(refreshToken: string) {
  * @returns 登录页面 URL
  */
 export function generateLoginUrl(originalUrl: string): string {
-  const loginUrl = new URL('/login', process.env.NEXTAUTH_URL || 'http://localhost:3000')
+  // 从环境变量获取配置的 URL
+  const baseUrl = process.env.NEXT_APP_URL || 'http://localhost:3000'
+  const loginUrl = new URL('/login', baseUrl)
   loginUrl.searchParams.set('redirect', originalUrl)
   return loginUrl.toString()
 }
@@ -110,12 +120,23 @@ export function generateLoginUrl(originalUrl: string): string {
 export function isValidRedirectUrl(url: string): boolean {
   try {
     const redirectUrl = new URL(url)
-    const allowedDomains = ['mydomain.com', 'localhost']
     
-    return allowedDomains.some(domain => 
-      redirectUrl.hostname === domain || 
-      redirectUrl.hostname.endsWith(`.${domain}`)
-    )
+    // 从环境变量获取允许的域名列表
+    const allowedDomainsStr = process.env.ALLOWED_DOMAINS || 'localhost'
+    const allowedDomains = allowedDomainsStr.split(',').map(domain => domain.trim())
+
+    return allowedDomains.some(domain => {
+      // 处理通配符域名 (*.domain.com)
+      if (domain.startsWith('*.')) {
+        const baseDomain = domain.slice(2) // 移除 '*.' 前缀
+        return redirectUrl.hostname === baseDomain || 
+               redirectUrl.hostname.endsWith(`.${baseDomain}`)
+      }
+      
+      // 处理普通域名
+      return redirectUrl.hostname === domain || 
+             redirectUrl.hostname.endsWith(`.${domain}`)
+    })
   } catch {
     return false
   }
